@@ -1,0 +1,28 @@
+{
+  "manifestVersion": 1,
+  "id": "wakatime",
+  "publisher": "nknwns",
+  "name": "WakaTime",
+  "version": "0.1.0",
+  "description": "Учёт рабочего времени в WakaTime: открытые файлы, сохранения, терминал, встроенный браузер и время AI-агентов.",
+  "author": { "name": "nknwns" },
+  "engines": { "orca": ">=1.4.222" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "commands": [
+      { "id": "wakatime.status", "title": "WakaTime: Статус" },
+      { "id": "wakatime.today", "title": "WakaTime: Время за сегодня" },
+      { "id": "wakatime.dashboard", "title": "WakaTime: Открыть дашборд" },
+      { "id": "wakatime.pause", "title": "WakaTime: Поставить на паузу" },
+      { "id": "wakatime.resume", "title": "WakaTime: Возобновить" }
+    ],
+    "events": [{ "on": "agent.status.changed" }, { "on": "worktree.created" }]
+  },
+  "capabilities": [
+    { "kind": "workspace:read" },
+    { "kind": "notifications:show" },
+    { "kind": "storage" },
+    { "kind": "events:subscribe" }
+  ]
+}

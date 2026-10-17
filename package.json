@@ -1,0 +1,14 @@
+{
+  "name": "orca-wakatime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WakaTime plugin for the Orca ADE",
+  "type": "module",
+  "license": "BSD-3-Clause",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}
