@@ -117,7 +117,7 @@ export async function fetchLatestCliTag(fetchImpl = fetch) {
   })
   if (!api.ok) throw new Error(`GitHub API: HTTP ${api.status}`)
   const body = await api.json()
-  if (typeof body?.tag_name !== 'string') throw new Error('GitHub API: нет tag_name')
+  if (typeof body?.tag_name !== 'string') throw new Error('GitHub API: no tag_name')
   return body.tag_name
 }
 
@@ -147,7 +147,7 @@ export async function installCli({ tag, home = homedir(), platform = process.pla
     headers: { 'User-Agent': 'orca-wakatime' },
     signal: AbortSignal.timeout(120_000)
   })
-  if (!response.ok) throw new Error(`скачивание ${url}: HTTP ${response.status}`)
+  if (!response.ok) throw new Error(`download ${url}: HTTP ${response.status}`)
   const zip = Buffer.from(await response.arrayBuffer())
   const { content } = extractFileByPrefix(zip, `wakatime-cli-${os}-${a}`)
   const dir = resourcesDir(home)
@@ -231,15 +231,15 @@ export function createCliRunner({ getCliPath, pluginString, log = () => {}, onRe
     const result = await runCli(cliPath, args)
     if (result.error?.code === 'ENOENT') {
       // Бинарник удалили или подменили — пусть вызывающий код поищет его заново.
-      log('wakatime-cli пропал с диска')
+      log('wakatime-cli disappeared from disk')
       onResult({ job, code: null, reason: 'cli-gone' })
       return
     }
     if (result.timedOut) {
-      log(`wakatime-cli не уложился в ${CLI_PROCESS_TIMEOUT_MS / 60_000} мин и был остановлен`)
+      log(`wakatime-cli did not finish in ${CLI_PROCESS_TIMEOUT_MS / 60_000} min and was stopped`)
     } else if (result.code !== EXIT.SUCCESS) {
       const details = (result.stderr || result.stdout || result.error?.message || '').trim().slice(0, 500)
-      log(`wakatime-cli завершился с кодом ${result.code}${details ? `: ${details}` : ''}`)
+      log(`wakatime-cli exited with code ${result.code}${details ? `: ${details}` : ''}`)
     }
     onResult({ job, code: result.code, stdout: result.stdout })
   }
@@ -254,7 +254,7 @@ export function createCliRunner({ getCliPath, pluginString, log = () => {}, onRe
           await runJob(job)
         } catch (error) {
           // Необработанный reject убил бы воркер (Orca завершает его на unhandledRejection).
-          log(`ошибка запуска wakatime-cli: ${error?.message ?? error}`)
+          log(`failed to run wakatime-cli: ${error?.message ?? error}`)
         } finally {
           if (job.type === 'sync-ai') syncPending = false
         }
@@ -273,7 +273,7 @@ export function createCliRunner({ getCliPath, pluginString, log = () => {}, onRe
       const index = queue.findIndex((j) => j.type === 'heartbeat' && !j.heartbeat.isWrite)
       const dropped = queue.splice(index === -1 ? 0 : index, 1)[0]
       if (dropped?.type === 'sync-ai') syncPending = false
-      log(`очередь переполнена, пропущен heartbeat ${dropped?.heartbeat?.entity ?? dropped?.type}`)
+      log(`queue full, dropped ${dropped?.heartbeat?.entity ?? dropped?.type}`)
     }
     queue.push(job)
     void drain()

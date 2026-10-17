@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createFocusProbe, parseMacFrontPid, parseMacIdleMs, parseWindowsProbeLine } from '../src/focus-probe.mjs'
+import { createFocusProbe, parseMacFrontPid, parseMacIdleMs, parseMacLanguages, parseWindowsProbeLine } from '../src/focus-probe.mjs'
 import { findRuntimeMetadata, runtimeMetadataCandidates } from '../src/runtime-client.mjs'
 
 test('parseWindowsProbeLine: номер запроса, простой, pid', () => {
@@ -75,5 +75,20 @@ test('findRuntimeMetadata предпочитает рантайм родител
     assert.equal(none, null)
   } finally {
     await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('macOS: первый язык из AppleLanguages', () => {
+  assert.equal(parseMacLanguages('(\n    "ru-RU",\n    "en-RU"\n)\n'), 'ru-RU')
+  assert.equal(parseMacLanguages('(\n    en\n)'), 'en')
+  assert.equal(parseMacLanguages('()'), null)
+})
+
+test('Windows: пробник сообщает язык интерфейса', { skip: process.platform !== 'win32' }, async () => {
+  const probe = createFocusProbe({ platform: 'win32', targetPid: process.pid })
+  try {
+    assert.match(String(await probe.locale()), /^[a-z]{2}(-[A-Z]{2})?/)
+  } finally {
+    probe.dispose()
   }
 })

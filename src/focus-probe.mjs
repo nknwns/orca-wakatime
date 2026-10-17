@@ -36,7 +36,7 @@ public static class OrcaWakaTimeProbe {
   }
 }
 "@
-[Console]::Out.WriteLine('ready')
+[Console]::Out.WriteLine("ready $([System.Globalization.CultureInfo]::CurrentUICulture.Name)")
 [Console]::Out.Flush()
 while ($true) {
   $line = [Console]::In.ReadLine()
@@ -58,6 +58,11 @@ export function parseWindowsProbeLine(line) {
 export function parseMacIdleMs(ioregOutput) {
   const match = /"HIDIdleTime"\s*=\s*(\d+)/.exec(ioregOutput)
   return match ? Math.floor(Number(match[1]) / 1e6) : null
+}
+
+/** Первый язык из `defaults read -g AppleLanguages`: `(\n    "ru-RU",\n    "en-RU"\n)`. */
+export function parseMacLanguages(output) {
+  return /([A-Za-z]{2,3}(?:[-_][A-Za-z0-9]+)*)/.exec(String(output).replace(/^\s*\(/, ''))?.[1] ?? null
 }
 
 export function parseMacFrontPid(lsappinfoOutput) {
@@ -85,6 +90,7 @@ function createWindowsProbe({ targetPid, log, env }) {
   let failures = 0
   let disabledUntil = 0
   let nextSeq = 1
+  let uiLocale = null
   let buffer = ''
   const pending = new Map()
 
@@ -111,7 +117,7 @@ function createWindowsProbe({ targetPid, log, env }) {
     failures += 1
     // Не перезапускаем CLR + Add-Type каждые 5 секунд, если PowerShell падает.
     disabledUntil = Date.now() + Math.min(2 ** (failures - 1), 30) * 60_000
-    log(`пробник фокуса остановлен (${reason}); повтор через ${Math.round((disabledUntil - Date.now()) / 60_000)} мин`)
+    log(`focus probe stopped (${reason}); retrying in ${Math.round((disabledUntil - Date.now()) / 60_000)} min`)
   }
 
   function start() {
@@ -130,7 +136,7 @@ function createWindowsProbe({ targetPid, log, env }) {
       } catch (error) {
         failures += 1
         disabledUntil = Date.now() + Math.min(2 ** (failures - 1), 30) * 60_000
-        log(`пробник фокуса не запустился: ${error.message}`)
+        log(`focus probe failed to start: ${error.message}`)
         starting = null
         resolve(false)
         return
@@ -145,7 +151,7 @@ function createWindowsProbe({ targetPid, log, env }) {
       }
       const readyTimer = setTimeout(() => {
         current.kill()
-        onGone(current, 'не ответил за 15 с')
+        onGone(current, 'no response in 15 s')
         settle(false)
       }, READY_TIMEOUT_MS)
 
@@ -157,7 +163,8 @@ function createWindowsProbe({ targetPid, log, env }) {
           const line = buffer.slice(0, newline).trim()
           buffer = buffer.slice(newline + 1)
           if (!ready) {
-            if (line === 'ready') {
+            if (line === 'ready' || line.startsWith('ready ')) {
+              uiLocale = line.slice('ready'.length).trim() || null
               ready = true
               failures = 0
               settle(true)
@@ -173,7 +180,7 @@ function createWindowsProbe({ targetPid, log, env }) {
         // PowerShell сериализует служебные потоки в CLIXML — это не ошибки.
         const text = chunk.trim()
         if (text && !text.startsWith('#< CLIXML') && !text.startsWith('<Objs')) {
-          log(`пробник фокуса: ${text.slice(0, 500)}`)
+          log(`focus probe: ${text.slice(0, 500)}`)
         }
       })
       current.stdin.on('error', () => {})
@@ -183,7 +190,7 @@ function createWindowsProbe({ targetPid, log, env }) {
         settle(false)
       })
       current.on('close', (code) => {
-        onGone(current, `код ${code}`)
+        onGone(current, `exit code ${code}`)
         settle(false)
       })
     })
@@ -207,6 +214,11 @@ function createWindowsProbe({ targetPid, log, env }) {
         focused: result.foregroundPid === 0 ? false : result.foregroundPid === targetPid,
         idleMs: result.idleMs
       }
+    },
+    /** Язык интерфейса Windows (CurrentUICulture) — его сообщает пробник при старте. */
+    async locale() {
+      if (!ready && Date.now() >= disabledUntil && !disposed) await start()
+      return uiLocale
     },
     dispose() {
       disposed = true
@@ -239,11 +251,15 @@ function createMacProbe({ targetPid }) {
       }
       return { focused, idleMs }
     },
+    async locale() {
+      const out = await run('/usr/bin/defaults', ['read', '-g', 'AppleLanguages'])
+      return out ? parseMacLanguages(out) : null
+    },
     dispose() {}
   }
 }
 
-function createLinuxProbe({ targetPid }) {
+function createLinuxProbe({ targetPid, env }) {
   return {
     async sample() {
       const [idle, pid] = await Promise.all([
@@ -253,6 +269,9 @@ function createLinuxProbe({ targetPid }) {
       const idleMs = idle && /^\d+\s*$/.test(idle) ? Number(idle) : null
       const focusedPid = pid && /^\d+\s*$/.test(pid) ? Number(pid) : null
       return { focused: focusedPid === null ? null : focusedPid === targetPid, idleMs }
+    },
+    async locale() {
+      return env.LC_ALL || env.LANG || null
     },
     dispose() {}
   }
@@ -270,5 +289,5 @@ export function createFocusProbe({
 } = {}) {
   if (platform === 'win32') return createWindowsProbe({ targetPid, log, env })
   if (platform === 'darwin') return createMacProbe({ targetPid })
-  return createLinuxProbe({ targetPid })
+  return createLinuxProbe({ targetPid, env })
 }

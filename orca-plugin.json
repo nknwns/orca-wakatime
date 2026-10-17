@@ -4,18 +4,19 @@
   "publisher": "nknwns",
   "name": "WakaTime",
   "version": "0.1.0",
-  "description": "Учёт рабочего времени в WakaTime: открытые файлы, сохранения, терминал, встроенный браузер и время AI-агентов.",
-  "author": { "name": "nknwns" },
+  "description": "Automatic time tracking with WakaTime: open files, saves, terminal, built-in browser, and AI agent time.",
+  "author": { "name": "nknwns", "url": "https://github.com/nknwns" },
+  "repository": "https://github.com/nknwns/orca-wakatime",
   "engines": { "orca": ">=1.4.222" },
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {
     "commands": [
-      { "id": "wakatime.status", "title": "WakaTime: Статус" },
-      { "id": "wakatime.today", "title": "WakaTime: Время за сегодня" },
-      { "id": "wakatime.dashboard", "title": "WakaTime: Открыть дашборд" },
-      { "id": "wakatime.pause", "title": "WakaTime: Поставить на паузу" },
-      { "id": "wakatime.resume", "title": "WakaTime: Возобновить" }
+      { "id": "wakatime.status", "title": "WakaTime: Status" },
+      { "id": "wakatime.today", "title": "WakaTime: Today's Time" },
+      { "id": "wakatime.dashboard", "title": "WakaTime: Open Dashboard" },
+      { "id": "wakatime.pause", "title": "WakaTime: Pause Tracking" },
+      { "id": "wakatime.resume", "title": "WakaTime: Resume Tracking" }
     ],
     "events": [{ "on": "agent.status.changed" }, { "on": "worktree.created" }]
   },

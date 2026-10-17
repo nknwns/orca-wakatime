@@ -122,7 +122,7 @@ test('zip: распаковка deflate и store', () => {
   assert.deepEqual(content, binary)
   const stored = makeZip([{ name: 'x/wakatime-cli-linux-amd64', content: Buffer.from('elf'), store: true }])
   assert.equal(extractFileByPrefix(stored, 'wakatime-cli-linux').content.toString(), 'elf')
-  assert.throws(() => extractFileByPrefix(zip, 'nope'), /нет файла/)
+  assert.throws(() => extractFileByPrefix(zip, 'nope'), /no file/)
   assert.throws(() => listZipEntries(Buffer.from('not a zip at all, definitely not')), /zip/)
 })
 
@@ -235,5 +235,5 @@ test('zip: повреждённое содержимое отклоняется 
   const zip = makeZip([{ name: 'wakatime-cli-linux-amd64', content: Buffer.from('payload'), store: true }])
   const corrupted = Buffer.from(zip)
   corrupted[30 + 'wakatime-cli-linux-amd64'.length] ^= 0xff
-  assert.throws(() => extractFileByPrefix(corrupted, 'wakatime-cli-linux'), /контрольная сумма/)
+  assert.throws(() => extractFileByPrefix(corrupted, 'wakatime-cli-linux'), /CRC32 mismatch/)
 })

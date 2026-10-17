@@ -75,7 +75,7 @@ export function createRuntimeClient({ log = () => {}, timeoutMs = 5000 } = {}) {
     // экземпляр Orca, а свой ещё не успел записать метаданные.
     if (!metadata || force || metadata.pid !== process.ppid) {
       metadata = await findRuntimeMetadata()
-      if (!metadata) throw new RuntimeRpcError('runtime_unavailable', 'orca-runtime.json не найден')
+      if (!metadata) throw new RuntimeRpcError('runtime_unavailable', 'orca-runtime.json not found')
     }
     return metadata
   }
@@ -95,7 +95,7 @@ export function createRuntimeClient({ log = () => {}, timeoutMs = 5000 } = {}) {
         else resolve(value)
       }
       const timer = setTimeout(
-        () => finish(new RuntimeRpcError('runtime_timeout', `${method}: нет ответа за ${timeoutMs} мс`)),
+        () => finish(new RuntimeRpcError('runtime_timeout', `${method}: no response in ${timeoutMs} ms`)),
         timeoutMs
       )
       socket.setEncoding('utf8')
@@ -115,7 +115,7 @@ export function createRuntimeClient({ log = () => {}, timeoutMs = 5000 } = {}) {
           try {
             frame = JSON.parse(line)
           } catch {
-            finish(new RuntimeRpcError('invalid_response', `${method}: неверный ответ рантайма`))
+            finish(new RuntimeRpcError('invalid_response', `${method}: invalid runtime response`))
             return
           }
           if (frame && frame._keepalive) continue
@@ -123,7 +123,7 @@ export function createRuntimeClient({ log = () => {}, timeoutMs = 5000 } = {}) {
             finish(null, frame.result)
           } else {
             const code = frame?.error?.code ?? 'rpc_error'
-            const message = frame?.error?.message ?? 'ошибка рантайма'
+            const message = frame?.error?.message ?? 'runtime error'
             finish(new RuntimeRpcError(code, `${method}: ${message}`))
           }
           return
@@ -133,7 +133,7 @@ export function createRuntimeClient({ log = () => {}, timeoutMs = 5000 } = {}) {
         finish(new RuntimeRpcError('runtime_unavailable', `${method}: ${error.message}`))
       )
       socket.on('close', () =>
-        finish(new RuntimeRpcError('runtime_unavailable', `${method}: соединение закрыто`))
+        finish(new RuntimeRpcError('runtime_unavailable', `${method}: connection closed`))
       )
     })
   }
@@ -150,7 +150,7 @@ export function createRuntimeClient({ log = () => {}, timeoutMs = 5000 } = {}) {
         if (fresh.authToken === meta.authToken && pickEndpoint(fresh) === pickEndpoint(meta)) {
           throw error
         }
-        log('метаданные рантайма обновлены, повторяю запрос')
+        log('runtime metadata changed, retrying request')
         return await send(fresh, method, params)
       }
     },

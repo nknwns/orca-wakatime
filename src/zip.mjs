@@ -14,7 +14,7 @@ function findEndOfCentralDirectory(buffer) {
   for (let offset = buffer.length - 22; offset >= minOffset; offset--) {
     if (buffer.readUInt32LE(offset) === EOCD_SIGNATURE) return offset
   }
-  throw new Error('zip: не найден конец центрального каталога')
+  throw new Error('zip: end of central directory not found')
 }
 
 export function listZipEntries(buffer) {
@@ -23,7 +23,7 @@ export function listZipEntries(buffer) {
   let offset = buffer.readUInt32LE(eocd + 16)
   const entries = []
   for (let i = 0; i < count; i++) {
-    if (buffer.readUInt32LE(offset) !== CENTRAL_SIGNATURE) throw new Error('zip: повреждён каталог')
+    if (buffer.readUInt32LE(offset) !== CENTRAL_SIGNATURE) throw new Error('zip: corrupted central directory')
     const method = buffer.readUInt16LE(offset + 10)
     const crc = buffer.readUInt32LE(offset + 16)
     const compressedSize = buffer.readUInt32LE(offset + 20)
@@ -41,7 +41,7 @@ export function listZipEntries(buffer) {
 
 export function extractZipEntry(buffer, entry) {
   const offset = entry.localOffset
-  if (buffer.readUInt32LE(offset) !== LOCAL_SIGNATURE) throw new Error('zip: повреждён локальный заголовок')
+  if (buffer.readUInt32LE(offset) !== LOCAL_SIGNATURE) throw new Error('zip: corrupted local header')
   const nameLength = buffer.readUInt16LE(offset + 26)
   const extraLength = buffer.readUInt16LE(offset + 28)
   const start = offset + 30 + nameLength + extraLength
@@ -49,11 +49,11 @@ export function extractZipEntry(buffer, entry) {
   let content
   if (entry.method === 0) content = Buffer.from(data)
   else if (entry.method === 8) content = inflateRawSync(data)
-  else throw new Error(`zip: неподдерживаемый метод сжатия ${entry.method}`)
-  if (content.length !== entry.size) throw new Error('zip: размер распакованного файла не совпал')
+  else throw new Error(`zip: unsupported compression method ${entry.method}`)
+  if (content.length !== entry.size) throw new Error('zip: extracted size mismatch')
   // zlib.crc32 есть с Node 22.2; на более старых проверяем только размер.
   if (typeof crc32 === 'function' && entry.crc !== undefined && crc32(content) >>> 0 !== entry.crc) {
-    throw new Error('zip: контрольная сумма не совпала — архив повреждён')
+    throw new Error('zip: CRC32 mismatch, archive is corrupted')
   }
   return content
 }
@@ -65,6 +65,6 @@ export function extractFileByPrefix(buffer, prefix) {
     const base = e.name.split('/').pop()
     return base.startsWith(prefix)
   })
-  if (!entry) throw new Error(`zip: нет файла ${prefix}*`)
+  if (!entry) throw new Error(`zip: no file ${prefix}*`)
   return { name: entry.name.split('/').pop(), content: extractZipEntry(buffer, entry) }
 }

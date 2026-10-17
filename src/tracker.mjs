@@ -18,6 +18,7 @@ import {
 import { createFocusProbe } from './focus-probe.mjs'
 import { createRuntimeClient } from './runtime-client.mjs'
 import { readWakatimeConfig } from './wakatime-config.mjs'
+import { createTranslator } from './i18n.mjs'
 import {
   EXIT,
   compareVersions,
@@ -50,7 +51,7 @@ const DASHBOARD_URL = 'https://wakatime.com/dashboard'
 
 function formatTime(ms) {
   if (!ms) return '—'
-  return new Date(ms).toLocaleTimeString('ru-RU', { hour12: false })
+  return new Date(ms).toTimeString().slice(0, 8)
 }
 
 function delay(ms, value) {
@@ -73,6 +74,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
   const rpc = deps.rpc ?? createRuntimeClient({ log: (m) => debugLog(m) })
   const probe = deps.probe ?? createFocusProbe({ log: (m) => logThrottled('probe', m) })
   const gate = createHeartbeatGate()
+  const { t, setLocale } = createTranslator('en')
 
   let debug = false
   let paused = false
@@ -103,6 +105,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     heartbeats: 0,
     lastHeartbeatAt: 0,
     lastEntity: null,
+    lastWasWrite: false,
     lastCliCode: null,
     lastProbe: { focused: null, idleMs: null },
     runtimeOk: null
@@ -129,7 +132,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     try {
       await orca.host.call('notifications.show', { title: title.slice(0, 120), body: body?.slice(0, 1000) })
     } catch (error) {
-      log(`уведомление не показано: ${error?.message ?? error}`)
+      log(`notification failed: ${error?.message ?? error}`)
     }
   }
 
@@ -152,7 +155,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     try {
       await orca.host.call('storage.set', { key, value })
     } catch (error) {
-      log(`не удалось сохранить ${key}: ${error?.message ?? error}`)
+      log(`failed to save ${key}: ${error?.message ?? error}`)
     }
   }
 
@@ -180,26 +183,22 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
         const latest = await fetchLatestCliTag()
         const current = cliPath ? await getCliVersion(cliPath) : null
         if (!current || compareVersions(latest, current) > 0) {
-          log(current ? `обновляю wakatime-cli ${current} → ${latest}` : `устанавливаю wakatime-cli ${latest}`)
+          log(current ? `updating wakatime-cli ${current} → ${latest}` : `installing wakatime-cli ${latest}`)
           cliPath = await installCli({ tag: latest })
         }
         await storageSet('cliCheckedAt', Date.now())
       } catch (error) {
         // Обновление не критично: если старый бинарник есть — работаем на нём.
-        log(`проверка обновлений wakatime-cli не удалась: ${error?.message ?? error}`)
+        log(`wakatime-cli update check failed: ${error?.message ?? error}`)
         // Не качаем заново при каждом старте воркера: следующая попытка — через несколько часов.
         if (cliPath) await storageSet('cliCheckedAt', Date.now() - CLI_UPDATE_INTERVAL_MS + CLI_FAILED_RETRY_MS)
         if (!cliPath) {
-          notifyOnce(
-            'cli-missing',
-            'WakaTime: нет wakatime-cli',
-            'Не удалось скачать wakatime-cli с GitHub. Проверьте интернет; повторю попытку позже.'
-          )
+          notifyOnce('cli-missing', t('cli-missing.title'), t('cli-missing.body'))
         }
       }
     }
     cliVersion = cliPath ? await getCliVersion(cliPath) : null
-    debugLog(`wakatime-cli: ${cliPath ?? 'не найден'} ${cliVersion ?? ''}`)
+    debugLog(`wakatime-cli: ${cliPath ?? 'not found'} ${cliVersion ?? ''}`)
     return cliPath
   }
 
@@ -225,9 +224,9 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
         }
         if (reason) return
         if (code === EXIT.AUTH) {
-          notifyOnce('auth', 'WakaTime: неверный API-ключ', 'Проверьте api_key в ~/.wakatime.cfg (https://wakatime.com/api-key).')
+          notifyOnce('auth', t('auth.title'), t('auth.body'))
         } else if (code === EXIT.CONFIG_PARSE || code === EXIT.CONFIG_READ) {
-          notifyOnce('config', 'WakaTime: ошибка конфига', 'Не удалось прочитать ~/.wakatime.cfg — проверьте синтаксис файла.')
+          notifyOnce('config', t('config.title'), t('config.body'))
         }
         if (job.type === 'heartbeat' && (code === EXIT.SUCCESS || code === EXIT.API_ERROR || code === EXIT.BACKOFF)) {
           // 102/112 — нет сети или бэкофф: heartbeat сохранён в офлайн-очередь wakatime-cli.
@@ -256,7 +255,8 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
       isUnsavedEntity: activity.isUnsavedEntity || (activity.entityType === 'file' && activity.kind === 'file' && !existsSync(activity.entity))
     }
     stats.lastHeartbeatAt = now
-    stats.lastEntity = `${activity.entity}${isWrite ? ' (сохранение)' : ''}`
+    stats.lastEntity = activity.entity
+    stats.lastWasWrite = isWrite
     debugLog(`heartbeat ${heartbeat.category} ${heartbeat.entityType}:${heartbeat.entity}${isWrite ? ' write' : ''}`)
     runner.sendHeartbeat(heartbeat)
   }
@@ -371,7 +371,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
       if (activity && userActive) emit(activity, now)
     } catch (error) {
       stats.runtimeOk = false
-      logThrottled('tick', `опрос Orca не удался: ${error?.message ?? error}`)
+      logThrottled('tick', `polling Orca failed: ${error?.message ?? error}`)
     } finally {
       ticking = false
     }
@@ -390,7 +390,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
         scheduleAiSync(AI_SYNC_MIN_INTERVAL_MS - sinceLastRun)
         return
       }
-      debugLog('синхронизирую активность AI-агентов')
+      debugLog('syncing AI agent activity')
       runner.syncAiActivity()
     }, delay)
   }
@@ -418,19 +418,15 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     paused = (await storageGet('paused')) === true
     configState = await readWakatimeConfig()
     debug = configState.debug
-    if (!configState.hasApiKey) {
-      notifyOnce(
-        'no-key',
-        'WakaTime: нужен API-ключ',
-        'Добавьте строку api_key = waka_… в секцию [settings] файла ~/.wakatime.cfg. Ключ: https://wakatime.com/api-key'
-      )
-    }
+    // Язык уведомлений — язык интерфейса ОС (Intl в воркере Electron всегда en-US).
+    setLocale(await Promise.race([probe.locale?.().catch(() => null) ?? null, delay(PROBE_TIMEOUT_MS * 4, null)]))
+    if (!configState.hasApiKey) notifyOnce('no-key', t('no-key.title'), t('no-key.body'))
     try {
       orcaVersion = (await rpc.call('status.get', null))?.appVersion ?? null
       stats.runtimeOk = true
     } catch (error) {
       stats.runtimeOk = false
-      log(`рантайм Orca недоступен: ${error?.message ?? error}`)
+      log(`Orca runtime unavailable: ${error?.message ?? error}`)
     }
     if (stopped) return
     // Heartbeat'ы, пойманные до готовности CLI, подождут в очереди (getCliPath ждёт cliReady).
@@ -445,7 +441,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     )
     await replayPendingHeartbeats()
     await cliReady
-    log(`запущен: ${pluginString()}, wakatime-cli ${cliVersion ?? 'не найден'}${paused ? ', на паузе' : ''}`)
+    log(`started: ${pluginString()}, wakatime-cli ${cliVersion ?? 'not found'}${paused ? ', paused' : ''}`)
     // Догоняем время агентов, накопившееся, пока воркер не работал.
     scheduleAiSync(5000)
   }
@@ -455,7 +451,7 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     const pending = await storageGet(PENDING_STORAGE_KEY)
     if (!Array.isArray(pending) || pending.length === 0) return
     await storageSet(PENDING_STORAGE_KEY, [])
-    log(`отправляю ${pending.length} heartbeat(ов), сохранённых при прошлом выключении`)
+    log(`sending ${pending.length} heartbeat(s) saved at last shutdown`)
     for (const heartbeat of pending) {
       if (heartbeat && typeof heartbeat.entity === 'string' && typeof heartbeat.time === 'number') {
         runner.sendHeartbeat(heartbeat)
@@ -485,23 +481,27 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     // Пока стояла пауза, вкладки не опрашивались — старое состояние не годится для сравнения.
     resetFileState()
     await storageSet('paused', value)
-    await notify('WakaTime', value ? 'Отслеживание на паузе.' : 'Отслеживание возобновлено.')
+    await notify('WakaTime', value ? t('paused') : t('resumed'))
     return { paused }
   }
 
   function statusText() {
     const probeState =
       stats.lastProbe.focused === null
-        ? 'недоступен (учёт по действиям во вкладках)'
-        : `работает, Orca ${stats.lastProbe.focused ? 'в фокусе' : 'в фоне'}`
+        ? t('status.probeUnavailable')
+        : t(stats.lastProbe.focused ? 'status.probeFocused' : 'status.probeBackground')
+    const runtime = stats.runtimeOk === false ? t('status.error') : stats.runtimeOk ? t('status.ok') : '—'
+    const last = stats.lastEntity
+      ? `${formatTime(stats.lastHeartbeatAt)} — ${stats.lastEntity}${stats.lastWasWrite ? t('status.saved') : ''}`
+      : '—'
     return [
-      `Отслеживание: ${paused ? 'на паузе' : 'активно'}`,
-      `wakatime-cli: ${cliVersion ?? 'не найден'}`,
-      `API-ключ: ${configState.hasApiKey ? 'есть' : 'нет'}`,
-      `Фокус и простой: ${probeState}`,
-      `Рантайм Orca: ${stats.runtimeOk === false ? 'ошибка' : stats.runtimeOk ? 'ок' : '—'}`,
-      `Heartbeat'ов за сессию: ${stats.heartbeats}`,
-      `Последний: ${formatTime(stats.lastHeartbeatAt)}${stats.lastEntity ? ` — ${stats.lastEntity}` : ''}`
+      t('status.tracking', { value: t(paused ? 'status.paused' : 'status.active') }),
+      t('status.cli', { value: cliVersion ?? t('status.notFound') }),
+      t('status.apiKey', { value: t(configState.hasApiKey ? 'status.yes' : 'status.no') }),
+      t('status.probe', { value: probeState }),
+      t('status.runtime', { value: runtime }),
+      t('status.heartbeats', { value: stats.heartbeats }),
+      t('status.last', { value: last })
     ].join('\n')
   }
 
@@ -513,17 +513,17 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     commands: {
       async status() {
         const text = statusText()
-        await notify('WakaTime: статус', text)
+        await notify(t('status.title'), text)
         return { text }
       },
       async today() {
         if (preparing) {
-          await notify('WakaTime: сегодня', 'wakatime-cli устанавливается или обновляется — попробуйте через минуту.')
+          await notify(t('today.title'), t('today.preparing'))
           return { text: null }
         }
         const { code, text } = await runner.today()
-        const body = text ?? (code === null ? 'wakatime-cli не найден.' : `wakatime-cli вернул код ${code}.`)
-        await notify('WakaTime: сегодня', body)
+        const body = text ?? (code === null ? t('today.noCli') : t('today.code', { value: code }))
+        await notify(t('today.title'), body)
         return { text: body }
       },
       async dashboard() {
