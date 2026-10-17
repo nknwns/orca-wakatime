@@ -35,7 +35,7 @@ If focus can't be detected, the plugin falls back to counting tab actions only (
 2. Orca → **Settings → Plugins**: turn on the plugin system.
 3. Click **Install plugin**, choose **Git URL**, and enter:
    ```
-   https://github.com/nknwns/orca-wakatime#v0.1.0
+   https://github.com/nknwns/orca-wakatime#v0.1.1
    ```
 4. Review the requested permissions and enable **WakaTime**.
 

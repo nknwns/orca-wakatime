@@ -294,8 +294,8 @@ export function createCliRunner({ getCliPath, pluginString, log = () => {}, onRe
       const cliPath = await getCliPath()
       if (!cliPath) return { code: null, text: null }
       // Команды Orca обрываются через 30 с — укладываемся раньше.
-      const result = await runCli(cliPath, ['--today', `--plugin=${pluginString()}`, '--timeout', '20'], {
-        timeoutMs: 25_000
+      const result = await runCli(cliPath, ['--today', `--plugin=${pluginString()}`, '--timeout', '15'], {
+        timeoutMs: 20_000
       })
       return { code: result.timedOut ? 'timeout' : result.code, text: result.stdout.trim() || null }
     },

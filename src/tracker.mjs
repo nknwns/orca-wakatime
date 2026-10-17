@@ -43,6 +43,8 @@ const RPC_WORKTREE_LIMIT = 1000
 const AGENT_STALE_MS = 30 * 60_000
 const CLI_FAILED_RETRY_MS = 6 * 60 * 60_000
 const SHUTDOWN_WAIT_MS = 1200
+// Команда, вызванная сразу после запуска воркера, ждёт конца старта, но укладывается в 30 с Orca.
+const COMMAND_STARTUP_WAIT_MS = 6000
 const PENDING_STORAGE_KEY = 'pendingHeartbeats'
 const PENDING_MAX = 200
 const MAX_BASELINE_BYTES = 2 * 1024 * 1024
@@ -414,7 +416,18 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
 
   // ---------- жизненный цикл ----------
 
-  async function start() {
+  let startup = null
+
+  function start() {
+    startup ??= startUnguarded()
+    return startup
+  }
+
+  async function waitForStartup() {
+    if (startup) await Promise.race([startup.catch(() => {}), delay(COMMAND_STARTUP_WAIT_MS)])
+  }
+
+  async function startUnguarded() {
     paused = (await storageGet('paused')) === true
     configState = await readWakatimeConfig()
     debug = configState.debug
@@ -512,11 +525,13 @@ export function createTracker(orca, { pluginVersion, deps = {} } = {}) {
     onAgentStatus,
     commands: {
       async status() {
+        await waitForStartup()
         const text = statusText()
         await notify(t('status.title'), text)
         return { text }
       },
       async today() {
+        await waitForStartup()
         if (preparing) {
           await notify(t('today.title'), t('today.preparing'))
           return { text: null }

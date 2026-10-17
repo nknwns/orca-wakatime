@@ -280,3 +280,17 @@ test('при выключении неотправленные heartbeat\'ы с�
     await next.cleanup()
   }
 })
+
+test('команда «статус» сразу после старта ждёт его окончания', async () => {
+  const t = await setup()
+  try {
+    t.storage.set('cliCheckedAt', Date.now())
+    const starting = t.tracker.start()
+    const { text } = await t.tracker.commands.status()
+    await starting
+    // До конца старта рантайм ещё не опрошен («—»), после — «ok».
+    assert.match(text, /Orca runtime: ok/)
+  } finally {
+    await t.cleanup()
+  }
+})

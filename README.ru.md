@@ -35,7 +35,7 @@
 2. Orca → **Settings → Plugins**: включите систему плагинов.
 3. Нажмите **Install plugin**, выберите **Git URL** и введите:
    ```
-   https://github.com/nknwns/orca-wakatime#v0.1.0
+   https://github.com/nknwns/orca-wakatime#v0.1.1
    ```
 4. Проверьте запрошенные возможности и включите **WakaTime**.
 
