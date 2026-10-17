@@ -45,7 +45,7 @@ The plugin worker starts with the first Orca event (an agent changes status, a w
 
 ## Commands
 
-Available in Orca quick actions (`Ctrl/Cmd+J`); shortcuts can be assigned in **Settings → Shortcuts**.
+Available in the Orca palette (`Cmd+J` on macOS, `Ctrl+Shift+J` on Windows and Linux; type "WakaTime"); shortcuts can be assigned in **Settings → Shortcuts**.
 
 - **WakaTime: Status**: CLI version, API key, focus detection, last heartbeat.
 - **WakaTime: Today's Time**: the same total an IDE shows in its status bar.

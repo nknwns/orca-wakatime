@@ -45,7 +45,7 @@
 
 ## Команды
 
-Доступны в быстрых действиях Orca (`Ctrl/Cmd+J`); горячие клавиши можно назначить в **Settings → Shortcuts**.
+Доступны в палитре Orca (`Ctrl+Shift+J` на Windows и Linux, `Cmd+J` на macOS; наберите «WakaTime»); горячие клавиши можно назначить в **Settings → Shortcuts**.
 
 - **WakaTime: Status** — версия CLI, наличие ключа, работает ли определение фокуса, последний heartbeat.
 - **WakaTime: Today's Time** — то же, что показывает строка статуса в IDE.
